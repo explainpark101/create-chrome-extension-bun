@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "build": "bun run scripts/pack.ts",
     "pack": "bun run scripts/pack.ts"
   },
   "devDependencies": {

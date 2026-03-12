@@ -58,7 +58,6 @@ function buildScripts() {
   writeFileSync(join(distDir, 'manifest.json'), JSON.stringify(manifestForDist, null, 2));
 
   const scripts = findAllTSFilesFromJSON(manifest);
-  console.log(scripts);
   const bar = new cliProgress.SingleBar({
     format: 'Building |{bar}| {percentage}% | {value}/{total} | {script}',
     barCompleteChar: '\u2588',

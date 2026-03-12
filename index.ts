@@ -53,7 +53,7 @@ async function main() {
   await copyRecursive(templateDir, projectDir);
   console.log(`│  Template copied to: ${projectDir}`);
 
-  const answer = await ask("│  Install dependencies? (y/n): ");
+  const answer = await ask("◇  Install dependencies? (y/n): ");
   if (/^y(es)?$/i.test(answer)) {
     console.log("│  Installing devDependencies...");
     await $`bun i`.cwd(projectDir).quiet();
@@ -62,9 +62,11 @@ async function main() {
   }
 
   console.log("└  Done!");
-  console.log("  [1] 다음 명령으로 개발 서버(또는 빌드) 실행:");
-  console.log("   bun run pack");
-  console.log("  [2] 크롬 브라우저에서 확장 프로그램을 로드하여 테스트하세요.");
+  console.log("   [1] 다음 명령으로 개발 서버(또는 빌드) 실행:");
+  console.log(`     cd ${targetDir}`);
+  console.log(`     bun install`);
+  console.log("     bun run pack");
+  console.log("   [2] 크롬 브라우저에서 `dist` 폴더를 선택하여 확장 프로그램을 로드하고 테스트하세요.");
 }
 
 main().catch((err) => {
