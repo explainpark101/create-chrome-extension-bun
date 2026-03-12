@@ -7,7 +7,13 @@
     "pack": "bun run scripts/pack.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "cli-progress": "^3.12.0",
+    "fast-glob": "^3.3.2",
+    "@types/bun": "latest",
+    "@types/chrome": "latest",
+    "@types/dom-parser": "latest",
+    "archiver": "^7.0.1",
+    "sharp": "^0.34.5"
   },
   "peerDependencies": {
     "typescript": "^5"

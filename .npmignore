@@ -1,3 +1,7 @@
 /.gitignore
 *-app/
 template/bun.lock
+dist
+
+node_modules
+versions

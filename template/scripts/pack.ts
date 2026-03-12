@@ -1,9 +1,11 @@
-import { createWriteStream, readFileSync, readdirSync, existsSync, mkdirSync, copyFileSync } from 'fs';
+import { createWriteStream, readFileSync, readdirSync, existsSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from 'fs';
 import { readdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import archiver from 'archiver';
+import cliProgress from 'cli-progress';
+import fg from 'fast-glob';
 import { manifest } from '../src/manifest';
 
 
@@ -13,31 +15,73 @@ const distDir = join(rootDir, 'dist');
 const srcDir = join(rootDir, 'src');
 const versionsDir = join(rootDir, 'versions');
 
-const COPY_EXCLUDE = ['content.ts', 'content.js', 'context-menu-handler.ts', 'context-menu-handler.js', 'background.ts', 'background.js', 'html-to-markdown.ts'];
+const findAllTSFilesFromJSON = (json: any): string[] => {
+  return Object.entries(json).flatMap(([key, value]) => {
+    if (typeof value === 'object' && value !== null) {
+      return findAllTSFilesFromJSON(value);
+    }
+    if (typeof value === 'string' && value.endsWith('.ts')) {
+      return [value];
+    }
+    return [];
+  });
+};
+
+const changeEveryTS2JSFromJSON = (json: chrome.runtime.ManifestV3): chrome.runtime.ManifestV3 => {
+  const transform = (value: unknown): unknown => {
+    if (typeof value === 'string') value = value.replaceAll('\\', '/');
+    if (typeof value === 'string' && value.endsWith('.ts')) {
+      return value.replace(/\.ts$/, '.js');
+    }
+    if (Array.isArray(value)) {
+      return value.map(transform);
+    }
+    if (typeof value === 'object' && value !== null) {
+      return Object.fromEntries(
+        Object.entries(value).map(([k, v]) => [k, transform(v)])
+      );
+    }
+    return value;
+  };
+  return transform(json) as chrome.runtime.ManifestV3;
+};
+
 
 function buildScripts() {
-  if (!existsSync(distDir)) {
-    mkdirSync(distDir, { recursive: true });
+  if (existsSync(distDir)){
+    rmSync(distDir, { recursive: true });
   }
+  mkdirSync(distDir, { recursive: true });
 
-  const scripts = [
-    // get every ts files from manifest.ts
-    ...Object.entries(manifest.content_scripts).map(([key, value]) => [value.js, value.js]),
-    ...Object.entries(manifest.background).map(([key, value]) => [value.service_worker, value.service_worker]),
-    ...Object.entries(manifest.action).map(([key, value]) => [value.default_icon, value.default_icon]),
-    ...Object.entries(manifest.icons).map(([key, value]) => [value, value]),
-    ...Object.entries(manifest.web_accessible_resources).map(([key, value]) => [value.resources, value.resources]),
-  ];
-  for (const [src, out] of scripts) {
-    const result = spawnSync('bun', ['build', join(srcDir, src), '--outdir', distDir], {
+  // make manifest.json
+  const manifestForDist = changeEveryTS2JSFromJSON(manifest);
+  writeFileSync(join(distDir, 'manifest.json'), JSON.stringify(manifestForDist, null, 2));
+
+  const scripts = findAllTSFilesFromJSON(manifest);
+  console.log(scripts);
+  const bar = new cliProgress.SingleBar({
+    format: 'Building |{bar}| {percentage}% | {value}/{total} | {script}',
+    barCompleteChar: '\u2588',
+    barIncompleteChar: '\u2591',
+    hideCursor: true,
+  });
+  bar.start(scripts.length, 0, { script: '-' });
+  for (let i = 0; i < scripts.length; i++) {
+    const script = scripts[i]!;
+    bar.update(i, { script });
+    const result = spawnSync('bun', ['build', join(srcDir, script), '--outdir', dirname(join(distDir, script))], {
       cwd: rootDir,
-      stdio: 'inherit',
+      stdio: 'pipe',
+      encoding: 'utf-8',
     });
     if (result.status !== 0) {
-      throw new Error(`bun build failed: ${src}`);
+      bar.stop();
+      console.error(result.stderr || result.stdout);
+      throw new Error(`bun build failed: ${script}`);
     }
-    console.log(`Built ${src} -> dist/${out}`);
+    bar.update(i + 1, { script });
   }
+  bar.stop();
 }
 
 function copyFilesFromSrcToDist() {
@@ -46,11 +90,37 @@ function copyFilesFromSrcToDist() {
   }
   const files = readdirSync(srcDir, { withFileTypes: true });
   for (const file of files) {
-    if (file.isFile() && !COPY_EXCLUDE.includes(file.name)) {
+    if (file.isFile() && !file.name.endsWith('.ts')) {
       copyFileSync(join(srcDir, file.name), join(distDir, file.name));
     }
   }
   console.log('Copied src/ -> dist/ (excluding content.ts)');
+}
+
+/** Replace .ts with .js in script src attributes of HTML content */
+function transformHtmlScriptSrc(html: string): string {
+  return html.replace(
+    /(src\s*=\s*["'])([^"']*?)\.ts([^"']*)(["'])/gi,
+    '$1$2.js$3$4'
+  );
+}
+
+function transformHtmlFilesInDist() {
+  const htmlFiles = fg.sync('**/*.html', { cwd: srcDir, absolute: true });
+  for (const htmlPath of htmlFiles) {
+    const relativePath = htmlPath.slice(srcDir.length + 1);
+    const distPath = join(distDir, relativePath);
+    const content = readFileSync(htmlPath, 'utf-8');
+    const transformed = transformHtmlScriptSrc(content);
+    const parentDir = dirname(distPath);
+    if (!existsSync(parentDir)) {
+      mkdirSync(parentDir, { recursive: true });
+    }
+    writeFileSync(distPath, transformed);
+  }
+  if (htmlFiles.length > 0) {
+    console.log(`Transformed ${htmlFiles.length} HTML file(s) (.ts -> .js in script src)`);
+  }
 }
 
 function getVersion() {
@@ -60,7 +130,7 @@ function getVersion() {
 }
 
 async function buildIcons() {
-  await import('./build-icons.js');
+  await import('./icon.ts');
 }
 
 async function createZip() {
@@ -68,10 +138,10 @@ async function createZip() {
   const archive = archiver('zip', { zlib: { level: 9 } });
   const output = createWriteStream(zipPath);
 
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     output.on('close', () => {
       console.log(`Created: ${zipPath} (${(archive.pointer() / 1024).toFixed(1)} KB)`);
-      resolve();
+      resolve(void 0);
     });
     archive.on('error', reject);
     archive.pipe(output);
@@ -88,6 +158,7 @@ async function createZip() {
 
 buildScripts();
 copyFilesFromSrcToDist();
+transformHtmlFilesInDist();
 await buildIcons();
 
 const version = getVersion();

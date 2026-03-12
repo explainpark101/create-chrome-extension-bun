@@ -1,28 +1,31 @@
 // manifest v3
 // this file will be automatically built into `manifest.json`
-import type { ManifestV3 } from "@types/chrome";
+import { flatIterdir } from "../scripts/utils/manifest";
 import path from "node:path";
-export const manifest: ManifestV3 = {
+
+export const manifest: chrome.runtime.ManifestV3 = {
   manifest_version: 3,
   name: "Test Extension",
   version: "0.0.0.1",
   description: "Test Extension",
   icons: {
-    "16": "icon-16.png",
-    "32": "icon-32.png",
-    "48": "icon-48.png",
-    "128": "icon-128.png",
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png",
   },
   action: {
     default_icon: {
-      "16": "icon-16.png",
-      "32": "icon-32.png",
-      "48": "icon-48.png",
-      "128": "icon-128.png",
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png",
     },
+    default_popup: "popup/index.html",
+    default_title: "Test Extension",
   },
-  permissions: ["clipboardWrite", "contextMenus"],
-  host_permissions: ["https://gemini.google.com/*"],
+  permissions: [],
+  host_permissions: ["<all_urls>"],
   background: {
     service_worker: "background.ts",
   },
@@ -36,7 +39,9 @@ export const manifest: ManifestV3 = {
   web_accessible_resources: [
     {
       // popup 폴더 내의 모든 파일을 웹 액세스 가능하게 설정
-      resources: [ path.join(__dirname, "popup", "**/*") ],
+      resources: (
+        await flatIterdir(path.join(__dirname, "popup"))
+      ),
       matches: ["<all_urls>"],
       use_dynamic_url: true,
     },
