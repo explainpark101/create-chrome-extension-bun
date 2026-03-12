@@ -10,7 +10,7 @@ Bun에서만 사용할 수 있습니다.
 ## 사용법
 
 ```bash
-bunx create-chrome-extension-bun [프로젝트명]
+bun create chrome-extension-bun [프로젝트명]
 ```
 
 프로젝트명을 생략하면 `./my-chrome-extension`에 생성됩니다.

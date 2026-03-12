@@ -3,7 +3,7 @@
 import { $ } from "bun";
 import path from "node:path";
 import readline from "node:readline";
-import { mkdir, copyFile, readdir } from "node:fs/promises";
+import { mkdir, copyFile, readdir, readFile, writeFile } from "node:fs/promises";
 
 function ask(question: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -20,12 +20,24 @@ const EXCULDE_FOLDER_FILES = [".git",
   ".cursor", "dist", "node_modules", "versions",
   "bun.lock", "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
 ];
-const targetDir = process.argv[2] ?? "./my-chrome-extension";
+const targetDir = process.argv[2] ?? "my-chrome-extension";
 const cwd = process.cwd();
 const projectDir = path.isAbsolute(targetDir)
   ? targetDir
   : path.join(cwd, targetDir);
 const templateDir = path.join(import.meta.dir, "template");
+
+const projectNameSnakeCase = targetDir
+.replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+.toLowerCase();
+const projectNamePascalCaseSpace = targetDir
+  .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+  .split(/[-_\s]+/)
+  .filter(Boolean)
+  .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+  .join("")
+  .replace(/([A-Z])/g, " $1")
+  .trim();
 
 async function copyRecursive(src: string, dest: string) {
   await mkdir(dest, { recursive: true });
@@ -46,12 +58,30 @@ async function copyRecursive(src: string, dest: string) {
   }
 }
 
+const renameComponents = async (projectDir: string, packageJsonName: string, ExtensionName: string) => {
+  // change manifest.json > name to projectName
+  const manifestPath = path.join(projectDir, "src", "manifest.ts");
+  let manifestContent = await readFile(manifestPath, "utf-8");
+  manifestContent = manifestContent.replace(/name: "Test Extension"/g, `name: "${ExtensionName}"`);
+  await writeFile(manifestPath, manifestContent);
+
+  // change package.json > name to projectName
+  const packageJsonPath = path.join(projectDir, "package.json");
+  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf-8"));
+  packageJson.name = packageJsonName;
+  await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
+}
+
 async function main() {
   console.log("◇  create-chrome-extension-bun");
   console.log("│  Copying local template...");
 
   await copyRecursive(templateDir, projectDir);
   console.log(`│  Template copied to: ${projectDir}`);
+  
+  console.log(`│  Setting Project Name to: ${projectNamePascalCaseSpace}`);
+  await renameComponents(projectDir, projectNameSnakeCase, projectNamePascalCaseSpace);
+  console.log(`│  Setting Package Name Completed`);
 
   const answer = await ask("◇  Install dependencies? (y/n): ");
   if (/^y(es)?$/i.test(answer)) {
