@@ -16,8 +16,8 @@ function ask(question: string): Promise<string> {
 }
 
 const EXCULDE_FOLDER_FILES = [".git", 
-  ".gitignore", ".npmignore", 
-  ".cursor", "dist", "node_modules", "versions",
+  ".npmignore", 
+  "dist", "node_modules", "versions",
   "bun.lock", "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
 ];
 const targetDir = process.argv[2] ?? "my-chrome-extension";
