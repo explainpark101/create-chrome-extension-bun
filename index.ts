@@ -3,7 +3,7 @@
 import { $ } from "bun";
 import path from "node:path";
 import readline from "node:readline";
-import { mkdir, copyFile, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, copyFile, readdir, readFile, rename, writeFile } from "node:fs/promises";
 
 function ask(question: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -72,11 +72,25 @@ const renameComponents = async (projectDir: string, packageJsonName: string, Ext
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
 }
 
+const restoreDotfiles = async (projectDir: string) => {
+  const templateGitignorePath = path.join(projectDir, "gitignore");
+  const gitignorePath = path.join(projectDir, ".gitignore");
+
+  try {
+    await rename(templateGitignorePath, gitignorePath);
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+};
+
 async function main() {
   console.log("◇  create-chrome-extension-bun");
   console.log("│  Copying local template...");
 
   await copyRecursive(templateDir, projectDir);
+  await restoreDotfiles(projectDir);
   console.log(`│  Template copied to: ${projectDir}`);
   
   console.log(`│  Setting Project Name to: ${projectNamePascalCaseSpace}`);

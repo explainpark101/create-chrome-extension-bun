@@ -145,12 +145,8 @@ async function createZip() {
     archive.on('error', reject);
     archive.pipe(output);
 
-    for (const f of files) {
-      const fullPath = join(distDir, f.name);
-      if (f.isFile()) {
-        archive.file(fullPath, { name: f.name });
-      }
-    }
+    // Include nested dirs (e.g. dist/icons/*.png), not only top-level files
+    archive.directory(distDir, false);
     archive.finalize();
   });
 }
